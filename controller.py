@@ -34,6 +34,9 @@ class SimpleSwitch13(app_manager.RyuApp):
         self.mac_to_port = {}
         self.monitor_thread = hub.spawn(self._monitor)
         
+#MONITORING
+
+#Funzione di aggiunta e rimozione switch dalla struttura datapath
     @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
     def _state_change_handler(self, ev):
         datapath = ev.datapath
@@ -46,7 +49,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                 self.logger.debug('unregister datapath: %016x', datapath.id)
                 del self.datapaths[datapath.id]
 
-    
+#Funzione di richiesta delle stats agli switch 
     def _request_stats(self, datapath):
         self.logger.debug('send stats request: %016x', datapath.id)
         ofproto = datapath.ofproto
@@ -55,17 +58,22 @@ class SimpleSwitch13(app_manager.RyuApp):
         req = parser.OFPPortStatsRequest(datapath, 0, ofproto.OFPP_ANY)
         datapath.send_msg(req)   
 
+
+#Funzione di monitoraggio sempre attiva, ogni 10 secondi chiede a ogni switch di inviare
+#le sue stats di ogni porta
     def _monitor(self):
         while True:
             for dp in self.datapaths.values():
                 self._request_stats(dp)
+            self.logger.info('\n#########################################################')
             hub.sleep(10)
-            
+
+#Funzione di stampa alla ricezione delle stats
     @set_ev_cls(ofp_event.EventOFPPortStatsReply, MAIN_DISPATCHER)
     def _port_stats_reply_handler(self, ev):
         body = ev.msg.body
 
-        self.logger.info('######################################################')
+
         self.logger.info('datapath         port     '
                          'rx-pkts  rx-bytes rx-error '
                          'tx-pkts  tx-bytes tx-error')
@@ -79,6 +87,10 @@ class SimpleSwitch13(app_manager.RyuApp):
                              stat.tx_packets, stat.tx_bytes, stat.tx_errors)
 
 
+
+
+
+#Configurazione / Codice già fornito
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
         datapath = ev.msg.datapath
