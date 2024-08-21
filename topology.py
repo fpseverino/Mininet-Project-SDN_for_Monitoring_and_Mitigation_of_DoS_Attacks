@@ -31,12 +31,12 @@ class Environment(object):
         self.s4 = self.net.addSwitch('s4', cls=OVSKernelSwitch)
 
         info("*** Adding links\n")  
-        self.net.addLink(self.h1, self.s1, bw=6, delay='0.0025ms')
-        self.s1_to_s3 = self.net.addLink(self.s1, self.s3, bw=3, delay='25ms')
-        self.net.addLink(self.h2, self.s2, bw=3, delay='25ms')
-        self.s2_to_s3 = self.net.addLink(self.s2, self.s3, bw=3, delay='25ms')
-        self.s3_to_s4 = self.net.addLink(self.s3, self.s4, bw=3, delay='25ms')
-        self.net.addLink(self.s4, self.h3, bw=6, delay='0.0025ms')
+        self.net.addLink(self.h1, self.s1, bw=10, delay='0.0025ms')
+        self.s1_to_s3 = self.net.addLink(self.s1, self.s3, bw=6, delay='25ms')
+        self.net.addLink(self.h2, self.s2, bw=6, delay='25ms')
+        self.s2_to_s3 = self.net.addLink(self.s2, self.s3, bw=6, delay='25ms')
+        self.s3_to_s4 = self.net.addLink(self.s3, self.s4, bw=6, delay='25ms')
+        self.net.addLink(self.s4, self.h3, bw=10, delay='0.0025ms')
                
         info("*** Starting network\n")
         self.net.build()

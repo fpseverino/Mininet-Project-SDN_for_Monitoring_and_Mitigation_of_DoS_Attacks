@@ -23,20 +23,30 @@ from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
 from ryu.lib.packet import ether_types
 from ryu.lib import hub
+import time
 
+timeInterval = 10
 
 class SimpleSwitch13(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
 
+    global timeInterval
+
     def __init__(self, *args, **kwargs):
         super(SimpleSwitch13, self).__init__(*args, **kwargs)
+        self.send_req = 0
+        self.rec_res = 0
+        self.threshold=700000
+        self.time = 0
         self.datapaths = {}
         self.mac_to_port = {}
+        self.monitoring_stats = {}
+        self.alarm_switch_port = {}
         self.monitor_thread = hub.spawn(self._monitor)
-        
-#MONITORING
 
-#Funzione di aggiunta e rimozione switch dalla struttura datapath
+    # MONITORING
+
+    # Funzione di aggiunta e rimozione switch dalla struttura datapath
     @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
     def _state_change_handler(self, ev):
         datapath = ev.datapath
@@ -49,48 +59,109 @@ class SimpleSwitch13(app_manager.RyuApp):
                 self.logger.debug('unregister datapath: %016x', datapath.id)
                 del self.datapaths[datapath.id]
 
-#Funzione di richiesta delle stats agli switch 
+    # Funzione di richiesta delle stats agli switch
     def _request_stats(self, datapath):
         self.logger.debug('send stats request: %016x', datapath.id)
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
         req = parser.OFPPortStatsRequest(datapath, 0, ofproto.OFPP_ANY)
-        datapath.send_msg(req)   
+        datapath.send_msg(req)
+        self.send_req = time.perf_counter()
 
-
-#Funzione di monitoraggio sempre attiva, ogni 10 secondi chiede a ogni switch di inviare
-#le sue stats di ogni porta
+    # Funzione di monitoraggio sempre attiva, ogni 10 secondi chiede a ogni switch di inviare
+    # le sue stats di ogni porta
     def _monitor(self):
         while True:
             for dp in self.datapaths.values():
                 self._request_stats(dp)
             self.logger.info('\n#########################################################')
-            hub.sleep(10)
+            hub.sleep(timeInterval)
 
-#Funzione di stampa alla ricezione delle stats
+    # Funzione di stampa alla ricezione delle stats
     @set_ev_cls(ofp_event.EventOFPPortStatsReply, MAIN_DISPATCHER)
     def _port_stats_reply_handler(self, ev):
         body = ev.msg.body
 
+        self.rec_res = time.perf_counter()
 
-        self.logger.info('datapath         port     '
-                         'rx-pkts  rx-bytes rx-error '
-                         'tx-pkts  tx-bytes tx-error')
-        self.logger.info('---------------- -------- '
-                         '-------- -------- -------- '
-                         '-------- -------- --------')
-        for stat in sorted(body, key=attrgetter('port_no')):
-            self.logger.info('%016x %8x %8d %8d %8d %8d %8d %8d',
-                             ev.msg.datapath.id, stat.port_no,
-                             stat.rx_packets, stat.rx_bytes, stat.rx_errors,
-                             stat.tx_packets, stat.tx_bytes, stat.tx_errors)
+        # Intervallo calcolato come 10 + differenza tra tempo di richiesta e risposta delle stats
+        self.time = timeInterval + (self.rec_res - self.send_req)
+        print(self.time)
+
+        """
+        Per il Monitoring:
+        1. E' stato creato un  dizionario, monitoring_stats, in cui è presente la coppia {id_switch: {no_porta: [starts], ...}, ...}
+        2. Se id_switch non è presente nella struttura, aggiungiamo  la coppia  all'interno del dizionario con le stats iniziali.
+        3. Se è già presente, aggiorniamo le stats con quelle di questa iterazione di monitoraggio.
+        """
+
+        if ev.msg.datapath.id not in self.monitoring_stats.keys():
+            self.logger.info('datapath         port     '
+                             'rx-pkts   rx-bytes/s   rx-error   '
+                             'tx-pkts   tx-bytes/s   tx-error')
+            self.logger.info('---------------- --------   '
+                             '-------    --------   --------   '
+                             '--------   --------   --------')
+            for stat in sorted(body, key=attrgetter('port_no')):
+                self.logger.info('%016x %8d   %8d   %8d    %8d    %8d    %8d   %8d',
+                                 ev.msg.datapath.id, stat.port_no,
+                                 stat.rx_packets, stat.rx_bytes / self.time, stat.rx_errors,
+                                 stat.tx_packets, stat.tx_bytes / self.time, stat.tx_errors)
+
+            self.monitoring_stats[ev.msg.datapath.id] = {
+                stat.port_no: [stat.rx_packets, stat.rx_bytes, stat.rx_errors, stat.tx_packets, stat.tx_bytes, stat.tx_errors]
+                for stat in sorted(body, key=attrgetter('port_no'))
+            }
+
+            #Inizializzazione della struttura di alarm, questo sarà un contatore, a 3 (dopo 30 secondi) scatterà l'allarme per quella porta.
+            self.alarm_switch_port[ev.msg.datapath.id] = {stat.port_no: 0 for stat in sorted(body, key=attrgetter('port_no'))}
+
+        else:
+            previous = self.monitoring_stats[ev.msg.datapath.id]
+            self.logger.info('datapath         port     '
+                             'rx-pkts   rx-bytes/s   rx-error   '
+                             'tx-pkts   tx-bytes/s   tx-error')
+            self.logger.info('---------------- --------    '
+                             '--------   --------   --------   '
+                             '--------   --------   --------')
+            for stat in sorted(body, key=attrgetter('port_no')):
+                self.logger.info('%016x %8x   %8d   %8d   %8d   %8d   %8d   %8d',
+                                 ev.msg.datapath.id, stat.port_no,
+                                 (stat.rx_packets - previous[stat.port_no][0]),
+                                 (stat.rx_bytes - previous[stat.port_no][1]) / self.time,
+                                 stat.rx_errors - previous[stat.port_no][2],
+                                 (stat.tx_packets - previous[stat.port_no][3]),
+                                 (stat.tx_bytes - previous[stat.port_no][4]) / self.time,
+                                 stat.tx_errors - previous[stat.port_no][5])
+               
+			#gestione del contatore Alarm	
+                if  (((stat.rx_bytes - previous[stat.port_no][1]) / self.time) > self.threshold  or  ((stat.tx_bytes - previous[stat.port_no][4]) / self.time) > self.threshold):
+                    if  self.alarm_switch_port[ev.msg.datapath.id][stat.port_no] < 3:
+                        self.alarm_switch_port[ev.msg.datapath.id][stat.port_no]= self.alarm_switch_port[ev.msg.datapath.id][stat.port_no] + 1
+                else:
+                    if  self.alarm_switch_port[ev.msg.datapath.id][stat.port_no] > 0: #cambiare se nel caso sia scattato l'allarme precedentemente 
+                        self.alarm_switch_port[ev.msg.datapath.id][stat.port_no]= self.alarm_switch_port[ev.msg.datapath.id][stat.port_no] - 1
+				
+                if  self.alarm_switch_port[ev.msg.datapath.id][stat.port_no] == 3: #blocco della porta
+                    print("ALLARME SULLA PORTA " + str(stat.port_no) + " dello Switch " + str(ev.msg.datapath.id))
+                else: #sblocco della porta
+                    pass
 
 
 
 
+            self.monitoring_stats[ev.msg.datapath.id] = {
+                stat.port_no: [stat.rx_packets, stat.rx_bytes, stat.rx_errors, stat.tx_packets, stat.tx_bytes, stat.tx_errors]
+                for stat in sorted(body, key=attrgetter('port_no'))
+            }
 
-#Configurazione / Codice già fornito
+            
+
+
+
+
+    # Configurazione / Codice già fornito
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
         datapath = ev.msg.datapath
