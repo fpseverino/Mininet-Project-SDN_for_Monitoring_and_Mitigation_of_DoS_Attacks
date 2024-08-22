@@ -27,16 +27,26 @@ import time
 
 timeInterval = 10
 
+# Codici di escape ANSI per i colori
+RED = "\033[91m"
+GREEN = "\033[92m"
+RESET = "\033[0m"
+
+
+
 class SimpleSwitch13(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
 
     global timeInterval
+    global RED
+    global RESET
+    global GREEN 
 
     def __init__(self, *args, **kwargs):
         super(SimpleSwitch13, self).__init__(*args, **kwargs)
         self.send_req = 0
         self.rec_res = 0
-        self.threshold=700000
+        self.threshold=700000 #80-90% del percorso critico
         self.time = 0
         self.datapaths = {}
         self.mac_to_port = {}
@@ -115,7 +125,7 @@ class SimpleSwitch13(app_manager.RyuApp):
             }
 
             #Inizializzazione della struttura di alarm, questo sarà un contatore, a 3 (dopo 30 secondi) scatterà l'allarme per quella porta.
-            self.alarm_switch_port[ev.msg.datapath.id] = {stat.port_no: 0 for stat in sorted(body, key=attrgetter('port_no'))}
+            self.alarm_switch_port[ev.msg.datapath.id] = {stat.port_no: [0, 0] for stat in sorted(body, key=attrgetter('port_no'))}
 
         else:
             previous = self.monitoring_stats[ev.msg.datapath.id]
@@ -137,18 +147,42 @@ class SimpleSwitch13(app_manager.RyuApp):
                
 			#gestione del contatore Alarm	
                 if  (((stat.rx_bytes - previous[stat.port_no][1]) / self.time) > self.threshold  or  ((stat.tx_bytes - previous[stat.port_no][4]) / self.time) > self.threshold):
-                    if  self.alarm_switch_port[ev.msg.datapath.id][stat.port_no] < 3:
-                        self.alarm_switch_port[ev.msg.datapath.id][stat.port_no]= self.alarm_switch_port[ev.msg.datapath.id][stat.port_no] + 1
+                
+                    if  self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][0] < 3: #Se per 30 secondi la threshold è superata, allora allarma. 
+                    
+                        self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][0] = self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][0] + 1
                 else:
-                    if  self.alarm_switch_port[ev.msg.datapath.id][stat.port_no] > 0: #cambiare se nel caso sia scattato l'allarme precedentemente 
-                        self.alarm_switch_port[ev.msg.datapath.id][stat.port_no]= self.alarm_switch_port[ev.msg.datapath.id][stat.port_no] - 1
+                    if  self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][0] > 0:
+                    
+                        self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][0] = self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][0] - 1
 				
-                if  self.alarm_switch_port[ev.msg.datapath.id][stat.port_no] == 3: #blocco della porta
-                    print("ALLARME SULLA PORTA " + str(stat.port_no) + " dello Switch " + str(ev.msg.datapath.id))
-                else: #sblocco della porta
-                    pass
-
-
+				
+				
+				
+                if  self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][0] == 3: #blocco della porta
+                    print(RED + "ALLARME SULLA PORTA " + str(stat.port_no) + " dello Switch " + str(ev.msg.datapath.id) + RESET)
+                   
+                    self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][1] =  1 
+                    
+                    print(self.alarm_switch_port)
+                    
+                    #BLOCCARE FLUSSO
+                    time.sleep(1)
+                    
+                    self.lock_flow(ev, stat.port_no)
+                    
+                elif self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][0] == 2 and self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][1] == 1:
+                	print( RED + "ALLARME SULLA PORTA " + str(stat.port_no) + " dello Switch " + str(ev.msg.datapath.id) + RESET)
+                	
+                	
+                elif self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][0] == 1 and self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][1] == 1 : #sblocco della porta 
+                    self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][1] = 0 
+                    self.unlock_flow(ev, stat.port_no)
+                    
+                
+ 
+                
+                    
 
 
             self.monitoring_stats[ev.msg.datapath.id] = {
@@ -156,10 +190,44 @@ class SimpleSwitch13(app_manager.RyuApp):
                 for stat in sorted(body, key=attrgetter('port_no'))
             }
 
-            
+           
 
 
+#Remediation per l'allarme
 
+    def lock_flow (self, ev, port_no):
+	
+        ofproto = ev.msg.datapath.ofproto
+        parser = ev.msg.datapath.ofproto_parser
+		
+        match = parser.OFPMatch(in_port=port_no) 
+		
+        instructions=[]
+		
+        flow_mod = parser.OFPFlowMod(datapath=ev.msg.datapath, priority=2, match=match, instructions=instructions, command=ofproto.OFPFC_ADD, out_port= ofproto.OFPP_ANY, out_group = ofproto.OFPG_ANY, flags=ofproto.OFPFF_SEND_FLOW_REM)
+		
+        ev.msg.datapath.send_msg(flow_mod)
+        print(RED + "Blocked traffic on port %s of switch %s " + RESET, port_no, ev.msg.datapath.id) 
+	
+
+
+    def unlock_flow(self, ev, port_no):
+	
+        ofproto = ev.msg.datapath.ofproto
+        parser = ev.msg.datapath.ofproto_parser
+        
+        match = parser.OFPMatch(in_port=port_no) 
+        
+        flow_mod = parser.OFPFlowMod(datapath=ev.msg.datapath, priority=2, match=match, command=ofproto.OFPFC_DELETE, out_port= ofproto.OFPP_ANY, out_group = ofproto.OFPG_ANY, flags=ofproto.OFPFF_SEND_FLOW_REM)
+        
+        ev.msg.datapath.send_msg(flow_mod)
+        
+        print(GREEN + "Unlocked traffic on port %s of switch %s" + RESET , port_no, ev.msg.datapath.id)
+		
+		
+		
+		
+		
 
     # Configurazione / Codice già fornito
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
