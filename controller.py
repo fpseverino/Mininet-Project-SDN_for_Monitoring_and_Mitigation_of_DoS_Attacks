@@ -24,6 +24,7 @@ from ryu.lib.packet import ethernet
 from ryu.lib.packet import ether_types
 from ryu.lib import hub
 import time
+from threading import Thread
 
 timeInterval = 10
 
@@ -31,6 +32,26 @@ timeInterval = 10
 RED = "\033[91m"
 GREEN = "\033[92m"
 RESET = "\033[0m"
+
+
+
+def process_func_unlock_MAC(ev, port_no, max_mac):
+    print(GREEN + "PROCESSO DI UNLOCK AVVIATO!" + RESET )
+    time.sleep(10)
+    
+    ofproto = ev.msg.datapath.ofproto
+    parser = ev.msg.datapath.ofproto_parser
+    
+    match = parser.OFPMatch(eth_src=max_mac) 
+    
+    flow_mod = parser.OFPFlowMod(datapath=ev.msg.datapath, priority=2, match=match, command=ofproto.OFPFC_DELETE, out_port= ofproto.OFPP_ANY, out_group = ofproto.OFPG_ANY, flags=ofproto.OFPFF_SEND_FLOW_REM)
+    
+    ev.msg.datapath.send_msg(flow_mod)
+    
+    print(GREEN + "Unlocked traffic on port %s of switch %s e MAC:  %s" + RESET , port_no, ev.msg.datapath.id, max_mac)
+		
+    
+    
 
 
 
@@ -46,6 +67,8 @@ class SimpleSwitch13(app_manager.RyuApp):
         super(SimpleSwitch13, self).__init__(*args, **kwargs)
         self.send_req = 0
         self.rec_res = 0
+        self.port_max_prate = 0  #DA USARE PER MAX PACKET RATE
+        self.port_max = 0
         self.threshold=700000 #80-90% del percorso critico
         self.time = 0
         self.packets_into_switches = {}
@@ -87,6 +110,7 @@ class SimpleSwitch13(app_manager.RyuApp):
             for dp in self.datapaths.values():
                 self._request_stats(dp)
             self.logger.info('\n#########################################################')
+            
             hub.sleep(timeInterval)
 
     # Funzione di stampa alla ricezione delle stats
@@ -129,6 +153,7 @@ class SimpleSwitch13(app_manager.RyuApp):
             self.alarm_switch_port[ev.msg.datapath.id] = {stat.port_no: [0, 0] for stat in sorted(body, key=attrgetter('port_no'))}
 
         else:
+        
             previous = self.monitoring_stats[ev.msg.datapath.id]
             self.logger.info('datapath         port     '
                              'rx-pkts   rx-bytes/s   rx-error   '
@@ -145,6 +170,8 @@ class SimpleSwitch13(app_manager.RyuApp):
                                  (stat.tx_packets - previous[stat.port_no][3]),
                                  (stat.tx_bytes - previous[stat.port_no][4]) / self.time,
                                  stat.tx_errors - previous[stat.port_no][5])
+                                 
+                                 
 
 		#gestione del contatore Alarm
                 if  (((stat.rx_bytes - previous[stat.port_no][1]) / self.time) > self.threshold  or  ((stat.tx_bytes - previous[stat.port_no][4]) / self.time) > self.threshold):
@@ -162,11 +189,11 @@ class SimpleSwitch13(app_manager.RyuApp):
 				
 				
                 if  self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][0] == 3: #blocco della porta
-                    print(RED + "ALLARME SULLA PORTA " + str(stat.port_no) + " dello Switch " + str(ev.msg.datapath.id) + RESET)
+                    print(RED + "ALLARME SULLA PORTA " + str(stat.port_no) + " dello Switch " + str(ev.msg.datapath.id) + RESET + "(LIVELLO 3)")
                    
                     self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][1] =  1 
                     
-                    print(self.alarm_switch_port)
+              
                     
                     #BLOCCARE FLUSSO
                     time.sleep(1)
@@ -174,18 +201,16 @@ class SimpleSwitch13(app_manager.RyuApp):
                     self.lock_flow(ev, stat.port_no)
                     
                 elif self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][0] == 2 and self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][1] == 1:
-                	print( RED + "ALLARME SULLA PORTA " + str(stat.port_no) + " dello Switch " + str(ev.msg.datapath.id) + RESET)
+                	print( RED + "ALLARME SULLA PORTA " + str(stat.port_no) + " dello Switch " + str(ev.msg.datapath.id) + RESET + "(LIVELLO 2)")
                 	
                 	
                 elif self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][0] == 1 and self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][1] == 1 : #sblocco della porta 
                     self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][1] = 0 
-                    self.unlock_flow(ev, stat.port_no)
+                    
                     
                 
  
-                
-                    
-
+     
 
 			#Aggiornamento delle statistiche del monitoring
             self.monitoring_stats[ev.msg.datapath.id] = {
@@ -193,11 +218,9 @@ class SimpleSwitch13(app_manager.RyuApp):
                 for stat in sorted(body, key=attrgetter('port_no'))
             }
             
-        #Azzeramento dei conteggi di pacchetti in arrivo negli switchs
-		for dpid in self.mac_to_port.keys():
-			for src in dpid.keys():
-			    in_port, count = self.mac_to_port[dpid][src]
-			    self.mac_to_port[dpid][src] = (in_port,0)
+            
+         
+       
 
            
 
@@ -205,45 +228,37 @@ class SimpleSwitch13(app_manager.RyuApp):
 
     def lock_flow (self, ev, port_no):
 	
-		datapath = ev.msg.datapath.id
+        datapath = ev.msg.datapath.id
         ofproto = ev.msg.datapath.ofproto
         parser = ev.msg.datapath.ofproto_parser
 		
-        max_count = 0 
-        max_mac = 0 
+      
         
         #Ricerca del MAC address incriminato
         for mac in self.mac_to_port[datapath].keys():
            in_port, count = self.mac_to_port[datapath][mac]
-           if(count > max_count):
-               max_count = count
-               max_mac = mac
+           if in_port == port_no:
+              max_mac = mac
+               
+               
            
+        if max_mac != 0:
+            match = parser.OFPMatch(eth_src=max_mac)
+            
+            instructions=[]
+            
+            flow_mod = parser.OFPFlowMod(datapath=ev.msg.datapath, priority=2, match=match, instructions=instructions, command=ofproto.OFPFC_ADD, out_port= ofproto.OFPP_ANY, out_group = ofproto.OFPG_ANY, flags=ofproto.OFPFF_SEND_FLOW_REM)
+            
+            ev.msg.datapath.send_msg(flow_mod)
+            print(RED + "Blocked traffic on port %s of switch %s, of MAC ADDRESS %s " + RESET, port_no, ev.msg.datapath.id, max_mac) 
         
-        match = parser.OFPMatch(eth_src=max_mac)
+            #Lo blocco, verrà sbloccato dopo un tempo arbitrario
+            p = Thread(target=process_func_unlock_MAC, args=(ev, port_no, max_mac))
+            p.start() #starto il processo
         
-        instructions=[]
-		
-        flow_mod = parser.OFPFlowMod(datapath=ev.msg.datapath, priority=2, match=match, instructions=instructions, command=ofproto.OFPFC_ADD, out_port= ofproto.OFPP_ANY, out_group = ofproto.OFPG_ANY, flags=ofproto.OFPFF_SEND_FLOW_REM)
-		
-        ev.msg.datapath.send_msg(flow_mod)
-        print(RED + "Blocked traffic on port %s of switch %s " + RESET, port_no, ev.msg.datapath.id) 
+        
 	
-
-
-    def unlock_flow(self, ev, port_no):
-	
-        ofproto = ev.msg.datapath.ofproto
-        parser = ev.msg.datapath.ofproto_parser
         
-        match = parser.OFPMatch(in_port=port_no) 
-        
-        flow_mod = parser.OFPFlowMod(datapath=ev.msg.datapath, priority=2, match=match, command=ofproto.OFPFC_DELETE, out_port= ofproto.OFPP_ANY, out_group = ofproto.OFPG_ANY, flags=ofproto.OFPFF_SEND_FLOW_REM)
-        
-        ev.msg.datapath.send_msg(flow_mod)
-        
-        print(GREEN + "Unlocked traffic on port %s of switch %s" + RESET , port_no, ev.msg.datapath.id)
-		
 		
 		
 		
@@ -260,6 +275,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER,
                                           ofproto.OFPCML_NO_BUFFER)]
         self.add_flow(datapath, 0, match, actions)
+        
 
     def add_flow(self, datapath, priority, match, actions, buffer_id=None):
         ofproto = datapath.ofproto
@@ -274,6 +290,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         else:
             mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
                                     match=match, instructions=inst)
+        
         datapath.send_msg(mod)
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
@@ -294,29 +311,38 @@ class SimpleSwitch13(app_manager.RyuApp):
             return
         dst = eth.dst
         src = eth.src
+        
+        
 
         dpid = datapath.id
         self.mac_to_port.setdefault(dpid, {})
 
         self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
 
+
+        
   
         #Aggiunta corrispondenza MAC-Porta e contatore pacchetti in ingresso nello switch
         
         #Se il mac address è già presente riassegna la porta e aggiorna il contatore
-        if src in self.mac_to_port[dpid]:
-            port, count = self.mac_to_port[dpid][src]
+        if src in self.mac_to_port[dpid].keys():
+            
+            in_port, count = self.mac_to_port[dpid][src]
             count += 1
             self.mac_to_port[dpid][src] = (in_port, count)
             
         #Se non è presente aggiungo la corrispondenza e inizializzo il counter 
         else:
             # Se il MAC address non è presente, inizializza il contatore
-            self.mac_to_port[dpid][src] = (in_port, 1)
+            self.mac_to_port[dpid][src] = (in_port, 0)
+            
+        
+            
+            
 
 
         if dst in self.mac_to_port[dpid]:
-            out_port = self.mac_to_port[dpid][dst]
+            out_port, count = self.mac_to_port[dpid][dst]
         else:
             out_port = ofproto.OFPP_FLOOD
 

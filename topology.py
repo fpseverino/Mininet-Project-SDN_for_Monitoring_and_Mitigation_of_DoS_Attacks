@@ -22,7 +22,10 @@ class Environment(object):
         info("*** Adding hosts and switches\n")
         self.h1 = self.net.addHost('h1', mac ='00:00:00:00:00:01', ip= '10.0.0.1')
         self.h2 = self.net.addHost('h2', mac ='00:00:00:00:00:02', ip= '10.0.0.2')
-        self.h3= self.net.addHost('h3', mac='00:00:00:00:00:03', ip= '10.0.0.3')
+        self.h3 = self.net.addHost('h3', mac='00:00:00:00:00:03', ip= '10.0.0.3')
+        self.h4 = self.net.addHost('h4', mac='00:00:00:00:00:04', ip= '10.0.0.4')
+        
+        
         
         #definition of switches
         self.s1 = self.net.addSwitch('s1', cls=OVSKernelSwitch)
@@ -32,6 +35,7 @@ class Environment(object):
 
         info("*** Adding links\n")  
         self.net.addLink(self.h1, self.s1, bw=10, delay='0.0025ms')
+        self.net.addLink(self.h4, self.s1, bw=10, delay='0.0025ms')
         self.s1_to_s3 = self.net.addLink(self.s1, self.s3, bw=6, delay='25ms')
         self.net.addLink(self.h2, self.s2, bw=6, delay='25ms')
         self.s2_to_s3 = self.net.addLink(self.s2, self.s3, bw=6, delay='25ms')
