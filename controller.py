@@ -48,6 +48,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         self.rec_res = 0
         self.threshold=700000 #80-90% del percorso critico
         self.time = 0
+        self.packets_into_switches = {}
         self.datapaths = {}
         self.mac_to_port = {}
         self.monitoring_stats = {}
@@ -144,14 +145,15 @@ class SimpleSwitch13(app_manager.RyuApp):
                                  (stat.tx_packets - previous[stat.port_no][3]),
                                  (stat.tx_bytes - previous[stat.port_no][4]) / self.time,
                                  stat.tx_errors - previous[stat.port_no][5])
-               
-			#gestione del contatore Alarm	
+
+		#gestione del contatore Alarm
                 if  (((stat.rx_bytes - previous[stat.port_no][1]) / self.time) > self.threshold  or  ((stat.tx_bytes - previous[stat.port_no][4]) / self.time) > self.threshold):
                 
                     if  self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][0] < 3: #Se per 30 secondi la threshold è superata, allora allarma. 
                     
                         self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][0] = self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][0] + 1
                 else:
+
                     if  self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][0] > 0:
                     
                         self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][0] = self.alarm_switch_port[ev.msg.datapath.id][stat.port_no][0] - 1
@@ -185,23 +187,41 @@ class SimpleSwitch13(app_manager.RyuApp):
                     
 
 
+			#Aggiornamento delle statistiche del monitoring
             self.monitoring_stats[ev.msg.datapath.id] = {
                 stat.port_no: [stat.rx_packets, stat.rx_bytes, stat.rx_errors, stat.tx_packets, stat.tx_bytes, stat.tx_errors]
                 for stat in sorted(body, key=attrgetter('port_no'))
             }
+            
+        #Azzeramento dei conteggi di pacchetti in arrivo negli switchs
+		for dpid in self.mac_to_port.keys():
+			for src in dpid.keys():
+			    in_port, count = self.mac_to_port[dpid][src]
+			    self.mac_to_port[dpid][src] = (in_port,0)
 
            
-
 
 #Remediation per l'allarme
 
     def lock_flow (self, ev, port_no):
 	
+		datapath = ev.msg.datapath.id
         ofproto = ev.msg.datapath.ofproto
         parser = ev.msg.datapath.ofproto_parser
 		
-        match = parser.OFPMatch(in_port=port_no) 
-		
+        max_count = 0 
+        max_mac = 0 
+        
+        #Ricerca del MAC address incriminato
+        for mac in self.mac_to_port[datapath].keys():
+           in_port, count = self.mac_to_port[datapath][mac]
+           if(count > max_count):
+               max_count = count
+               max_mac = mac
+           
+        
+        match = parser.OFPMatch(eth_src=max_mac)
+        
         instructions=[]
 		
         flow_mod = parser.OFPFlowMod(datapath=ev.msg.datapath, priority=2, match=match, instructions=instructions, command=ofproto.OFPFC_ADD, out_port= ofproto.OFPP_ANY, out_group = ofproto.OFPG_ANY, flags=ofproto.OFPFF_SEND_FLOW_REM)
@@ -280,7 +300,20 @@ class SimpleSwitch13(app_manager.RyuApp):
 
         self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
 
-        self.mac_to_port[dpid][src] = in_port
+  
+        #Aggiunta corrispondenza MAC-Porta e contatore pacchetti in ingresso nello switch
+        
+        #Se il mac address è già presente riassegna la porta e aggiorna il contatore
+        if src in self.mac_to_port[dpid]:
+            port, count = self.mac_to_port[dpid][src]
+            count += 1
+            self.mac_to_port[dpid][src] = (in_port, count)
+            
+        #Se non è presente aggiungo la corrispondenza e inizializzo il counter 
+        else:
+            # Se il MAC address non è presente, inizializza il contatore
+            self.mac_to_port[dpid][src] = (in_port, 1)
+
 
         if dst in self.mac_to_port[dpid]:
             out_port = self.mac_to_port[dpid][dst]
@@ -303,4 +336,5 @@ class SimpleSwitch13(app_manager.RyuApp):
         out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
                                   in_port=in_port, actions=actions, data=data)
         datapath.send_msg(out)
+
 
