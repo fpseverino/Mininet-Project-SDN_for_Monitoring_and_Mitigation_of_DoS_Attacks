@@ -39,7 +39,7 @@ RESET = "\033[0m"
 #Funzione del Thread di Unlock 
 def unlock_func(ev, src, value):
 
-    wait = pow(2, value)
+    wait = pow(7, value)
 
     print("Source " + str(src) + " bloccata per " + str(wait) + " secondi sullo Switch " + str(ev.msg.datapath.id))
     time.sleep(wait) 
