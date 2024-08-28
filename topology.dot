@@ -1,0 +1,18 @@
+graph G {
+    graph [dpi=300, rankdir=LR];
+    h1 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><IMG SRC="./botFiles/host.png" SCALE="TRUE"/></TD></TR><TR><TD ALIGN="CENTER" PORT="label">h1</TD></TR></TABLE>>, shape=plaintext, width=0.2, height=0.2, fontsize=10];
+    h2 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><IMG SRC="./botFiles/host.png" SCALE="TRUE"/></TD></TR><TR><TD ALIGN="CENTER" PORT="label">h2</TD></TR></TABLE>>, shape=plaintext, width=0.2, height=0.2, fontsize=10];
+    h3 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><IMG SRC="./botFiles/host.png" SCALE="TRUE"/></TD></TR><TR><TD ALIGN="CENTER" PORT="label">h3</TD></TR></TABLE>>, shape=plaintext, width=0.2, height=0.2, fontsize=10];
+    h4 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><IMG SRC="./botFiles/host.png" SCALE="TRUE"/></TD></TR><TR><TD ALIGN="CENTER" PORT="label">h4</TD></TR></TABLE>>, shape=plaintext, width=0.2, height=0.2, fontsize=10];
+    s1 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><IMG SRC="./botFiles/switch.png" SCALE="TRUE"/></TD></TR><TR><TD ALIGN="CENTER" PORT="label">s1</TD></TR></TABLE>>, shape=plaintext, width=0.2, height=0.2, fontsize=10];
+    s2 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><IMG SRC="./botFiles/switch.png" SCALE="TRUE"/></TD></TR><TR><TD ALIGN="CENTER" PORT="label">s2</TD></TR></TABLE>>, shape=plaintext, width=0.2, height=0.2, fontsize=10];
+    s3 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><IMG SRC="./botFiles/switch.png" SCALE="TRUE"/></TD></TR><TR><TD ALIGN="CENTER" PORT="label">s3</TD></TR></TABLE>>, shape=plaintext, width=0.2, height=0.2, fontsize=10];
+    s4 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><IMG SRC="./botFiles/switch.png" SCALE="TRUE"/></TD></TR><TR><TD ALIGN="CENTER" PORT="label">s4</TD></TR></TABLE>>, shape=plaintext, width=0.2, height=0.2, fontsize=10];
+    h1 -- s1;
+    h4 -- s1;
+    s1 -- s3;
+    h2 -- s2;
+    s2 -- s3;
+    s3 -- s4;
+    s4 -- h3;
+}

@@ -2,12 +2,14 @@
 import threading
 import random
 import time
+import os
 from mininet.log import setLogLevel, info
 from mininet.topo import Topo
 from mininet.net import Mininet, CLI
 from mininet.node import OVSKernelSwitch, Host
 from mininet.link import TCLink, Link
 from mininet.node import RemoteController #Controller
+from drawTopo import draw_topology_with_graphviz
 
 class Environment(object):
 
@@ -15,19 +17,17 @@ class Environment(object):
         "Create a network."
         self.net = Mininet(controller=RemoteController, link=TCLink)
         info("*** Starting controller\n")
-        c1 = self.net.addController( 'c1', controller=RemoteController) #Controller
+        c1 = self.net.addController('c1', controller=RemoteController) #Controller
         c1.start()
         
-        #definition of hosts
+        # Definition of hosts
         info("*** Adding hosts and switches\n")
-        self.h1 = self.net.addHost('h1', mac ='00:00:00:00:00:01', ip= '10.0.0.1')
-        self.h2 = self.net.addHost('h2', mac ='00:00:00:00:00:02', ip= '10.0.0.2')
-        self.h3 = self.net.addHost('h3', mac='00:00:00:00:00:03', ip= '10.0.0.3')
-        self.h4 = self.net.addHost('h4', mac='00:00:00:00:00:04', ip= '10.0.0.4')
+        self.h1 = self.net.addHost('h1', mac='00:00:00:00:00:01', ip='10.0.0.1')
+        self.h2 = self.net.addHost('h2', mac='00:00:00:00:00:02', ip='10.0.0.2')
+        self.h3 = self.net.addHost('h3', mac='00:00:00:00:00:03', ip='10.0.0.3')
+        self.h4 = self.net.addHost('h4', mac='00:00:00:00:00:04', ip='10.0.0.4')
         
-        
-        
-        #definition of switches
+        # Definition of switches
         self.s1 = self.net.addSwitch('s1', cls=OVSKernelSwitch)
         self.s2 = self.net.addSwitch('s2', cls=OVSKernelSwitch)
         self.s3 = self.net.addSwitch('s3', cls=OVSKernelSwitch)
@@ -45,10 +45,15 @@ class Environment(object):
         info("*** Starting network\n")
         self.net.build()
         self.net.start()
+        
+        # Generate the Graphviz DOT file and convert to an image
+        draw_topology_with_graphviz(self.net)
+        
+        
+        
 
-...
+    
 if __name__ == '__main__':
-
     setLogLevel('info')
     info('starting the environment\n')
     env = Environment()

@@ -25,6 +25,7 @@ from ryu.lib.packet import ether_types
 from ryu.lib import hub
 import time
 from threading import Thread
+import json 
 
 timeInterval = 10
 
@@ -119,6 +120,20 @@ class SimpleSwitch13(app_manager.RyuApp):
                 self._request_stats(dp)
             self.logger.info('\n#########################################################')
             hub.sleep(timeInterval)
+            
+            with open("./botFiles/filestats.txt", "w") as file:
+                 data = {
+                          f"{key}": {
+                          f"{value[0]} - {value[1]} - {value[2]}": f"{self.alarm_flow[key][value][0]} - {self.alarm_flow[key][value][1]}"
+                          for value in self.alarm_flow[key].keys()
+                          }                
+                          for key in self.alarm_flow.keys()
+                        }
+                        
+                 json.dump(data, file, indent=4)
+                 file.close()
+                 
+                 
             
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def _flow_stats_reply_handler(self, ev):
