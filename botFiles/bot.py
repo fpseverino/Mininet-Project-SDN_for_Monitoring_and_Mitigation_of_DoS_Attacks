@@ -22,7 +22,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
     
-    await update.message.reply_text("Scegli un'opzione", reply_markup=reply_markup)
+    await update.message.reply_text("Scegli un'opzione.", reply_markup=reply_markup)
 
 
 
@@ -78,22 +78,22 @@ async def handle_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
          
          value = user_choice.split(" ")[2]
          
-         msg = ""
+         msg = "<b>Statistiche per " + user_choice + "</b>\n "
          
          for flow in js[value].keys():
              newline = "\n"
              port = "🚪 Porta: " + flow.split("-")[0]
              src  = "📤 MAC Sorgente: " + flow.split("-")[1]
              dst = "📥 MAC Destinazione: " + flow.split("-")[2]
-             cont = "🧮 Conteggio attuale: " + js[value][flow].split("-")[0]
+             cont = "🧮 Stato Conteggio: " + js[value][flow].split("-")[0]
              alarm_status = "🚨 Stato allarme: " + js[value][flow].split("-")[1]
-             adv = "⚠️ Penalità stimata: "+ str(pow(7, int(js[value][flow].split("-")[1]) +1 ))
+             adv = "⚠️ Penalità stimata: "+ str(pow(7, int(js[value][flow].split("-")[1]) +1)) + "sec."
              
-             msg = msg + newline + port + newline + src + newline + dst + newline + cont +  newline + alarm_status + newline + adv + newline  
+             msg = newline + msg + newline + port + newline + src + newline + dst + newline + cont +  newline + alarm_status + newline + adv + newline  
              
          
          
-         await update.message.reply_text(msg)  
+         await update.message.reply_text(msg, parse_mode="HTML")  
          
              
              
