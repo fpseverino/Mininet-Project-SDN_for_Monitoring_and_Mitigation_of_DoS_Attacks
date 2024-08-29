@@ -23,6 +23,7 @@ from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
 from ryu.lib.packet import ether_types
 from ryu.lib import hub
+import requests
 import time
 from threading import Thread
 import json 
@@ -55,9 +56,44 @@ def unlock_func(ev, src, value):
         
     ev.msg.datapath.send_msg(flow_mod)
         
-    print(GREEN + "Unlocked traffic of flow source %s of switch %s" + RESET, src, ev.msg.datapath.id)
+    message = f"✅ Sblocco del traffico dall'indirizzo MAC {src} nello switch {ev.msg.datapath.id}."
+    print(GREEN + message + RESET)
+    send_telegram_message(message)  # Invio notifica Telegram
     
 
+#Interazione con Bot telegram
+
+def get_chat_ids():
+        
+    with open("./botFiles/chat_id_list.txt","r")as file:
+        loc_ids_list = file.readlines()
+        return loc_ids_list
+
+
+# Funzione per inviare messaggi al bot Telegram
+def send_telegram_message(message):
+    try:
+        bot_token = '7470407133:AAHKFLviL_l9BDVqX14uZfeUs9gePitSuNI'  
+        ids_list = get_chat_ids()
+        for id in ids_list:  
+            url = "https://api.telegram.org/bot"+bot_token+"/sendMessage"
+            payload = {
+                'chat_id': id,
+                'text': message
+            }
+
+            response = requests.post(url, data=payload, params={"offset": 0})
+
+            # Controllo se la richiesta è andata a buon fine
+            if response.status_code != 200:
+                raise Exception(f"Failed to send message: {response.status_code}, {response.text}")
+
+            print("Message sent successfully.")
+
+    except requests.exceptions.RequestException as e:
+        print(f"Request error: {e}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 
 class SimpleSwitch13(app_manager.RyuApp):
@@ -305,7 +341,9 @@ class SimpleSwitch13(app_manager.RyuApp):
         flow_mod = parser.OFPFlowMod(datapath=ev.msg.datapath, priority=2, match=match, instructions=instructions, command=ofproto.OFPFC_ADD, out_port= ofproto.OFPP_ANY, out_group = ofproto.OFPG_ANY, flags=ofproto.OFPFF_SEND_FLOW_REM)
 		
         ev.msg.datapath.send_msg(flow_mod)
-        print(RED + "Blocked traffic of flow %s of switch %s " + RESET, src, ev.msg.datapath.id) 
+        message = f"❌ Blocco del traffico dall'indirizzo MAC {src} nello switch {ev.msg.datapath.id}."
+        print(RED + message + RESET)
+        send_telegram_message(message)  # Invio notifica Telegram 
         
         self.alarm_flow[ev.msg.datapath.id][(port, src, dst)][1] += 1
         
@@ -394,3 +432,4 @@ class SimpleSwitch13(app_manager.RyuApp):
         out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
                                   in_port=in_port, actions=actions, data=data)
         datapath.send_msg(out)
+        

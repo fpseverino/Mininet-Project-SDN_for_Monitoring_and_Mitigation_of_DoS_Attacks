@@ -49,6 +49,22 @@ class Environment(object):
         # Generate the Graphviz DOT file and convert to an image
         draw_topology_with_graphviz(self.net)
         
+    def stop(self):
+        #Stop the network and clean up resources
+        info("*** Stopping network\n")
+        self.net.stop()
+
+        #Remove the topology image file
+        topology_image = "topology.png"
+        if os.path.exists(topology_image):
+            try:
+                os.remove(topology_image)
+                info("File topology.png eliminato con successo.\n")
+            except Exception as e:
+                info(f"Errore durante l'eliminazione di topology.png: {e}\n")
+        else:
+            info("Il file topology.png non esiste\n")    
+        
         
         
 
@@ -60,3 +76,6 @@ if __name__ == '__main__':
 
     info("*** Running CLI\n")
     CLI(env.net)
+    
+    #Stop the environment after exiting CLI
+    env.stop()
