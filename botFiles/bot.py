@@ -79,17 +79,28 @@ async def handle_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
          value = user_choice.split(" ")[2]
          
          msg = "<b>Statistiche per " + user_choice + "</b>\n "
+         tab = "    "
          
+         prev=""
          for flow in js[value].keys():
              newline = "\n"
-             port = "🚪 Porta: " + flow.split("-")[0]
+             port = "<b>🚪 Porta: " + flow.split("-")[0] + "</b>"
+             
              src  = "📤 MAC Sorgente: " + flow.split("-")[1]
              dst = "📥 MAC Destinazione: " + flow.split("-")[2]
              cont = "🧮 Stato Conteggio: " + js[value][flow].split("-")[0]
              alarm_status = "🚨 Stato allarme: " + js[value][flow].split("-")[1]
              adv = "⚠️ Penalità stimata: "+ str(pow(7, int(js[value][flow].split("-")[1]) +1)) + "sec."
              
-             msg = newline + msg + newline + port + newline + src + newline + dst + newline + cont +  newline + alarm_status + newline + adv + newline  
+             if port == prev:
+             
+                msg = newline + msg + newline + tab + newline + tab + src +  tab+ newline + tab + dst + newline + tab + cont +  newline + tab + alarm_status + newline + tab + adv + newline  
+             
+             else:
+                msg = newline + msg + newline + port + newline + tab + newline + tab + src +  tab+ newline + tab + dst + newline + tab + cont +  newline + tab + alarm_status + newline + tab + adv + newline
+                
+                
+             prev = port
              
          
          
