@@ -145,7 +145,7 @@ async def handle_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 if __name__ == '__main__':
-    application = ApplicationBuilder().token('7470407133:AAHKFLviL_l9BDVqX14uZfeUs9gePitSuNI').build()
+    application = ApplicationBuilder().token('TOKEN').build()
 
     start_handler = CommandHandler('start', start)
 
