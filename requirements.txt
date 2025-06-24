@@ -1,0 +1,28 @@
+# Requirements for Mininet SDN Project
+# These versions are tested to work with Python 3.13
+
+# Core Ryu framework (installed from patched source)
+# ryu==4.34  # Installed from git with Python 3.13 compatibility patches
+
+# Event-driven networking library
+eventlet>=0.33.0
+
+# DNS library 
+dnspython>=2.0.0
+
+# Network address manipulation
+netaddr>=0.8.0
+
+# Configuration library  
+oslo.config>=8.0.0
+
+# Message packing
+msgpack>=1.0.0
+
+# Web framework components
+webob>=1.8.0
+routes>=2.4.0
+
+# Build tools and compatibility
+setuptools>=59.0.0
+packaging>=20.0

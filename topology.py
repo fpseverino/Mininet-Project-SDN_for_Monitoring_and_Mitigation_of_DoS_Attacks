@@ -2,6 +2,8 @@
 import threading
 import random
 import time
+# Import compatibility layer for Python 3.13
+import distutils_compat
 from mininet.log import setLogLevel, info
 from mininet.topo import Topo
 from mininet.net import Mininet, CLI
