@@ -53,11 +53,31 @@ sudo python topology.py
 
 ## Complete Workflow:
 
+### Using the Original Controller:
 1. **Test Setup**: `./sdn_setup.sh test`
 2. **Terminal 1**: `./sdn_setup.sh controller` (starts Ryu controller)
 3. **Terminal 2**: `./sdn_setup.sh topology` (starts Mininet topology)
 
+### Using the Modular Controller (Recommended):
+1. **Test Setup**: `python test_modular_controller.py`
+2. **Terminal 1**: `python run_controller.py modular_controller.py`
+3. **Terminal 2**: `./sdn_setup.sh topology` (starts Mininet topology)
+
 The controller will listen on port 6633, and the topology will connect to it automatically.
+
+## Controller Options:
+
+### Original Controller (`controller.py`)
+- Monolithic design
+- Basic DoS detection and mitigation
+- All functionality in one class
+
+### Modular Controller (`modular_controller.py`) - **Recommended**
+- Modular architecture with separate components
+- Better maintainability and extensibility
+- Thread-safe inter-module communication
+- Configurable policies and thresholds
+- See `MODULAR_ARCHITECTURE.md` for detailed documentation
 
 ## Files created:
 - `distutils_compat.py` - Compatibility layer for Python 3.13
