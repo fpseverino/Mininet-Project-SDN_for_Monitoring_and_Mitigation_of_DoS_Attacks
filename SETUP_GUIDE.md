@@ -62,6 +62,36 @@ sudo python topology.py
 1. **Test Setup**: `python test_modular_controller.py`
 2. **Terminal 1**: `python run_controller.py modular_controller.py`
 3. **Terminal 2**: `./sdn_setup.sh topology` (starts Mininet topology)
+4. **Terminal 3**: `python policy_management_example.py` (optional - policy management)
+
+### External Policy Management:
+The modular controller includes an external policy system that allows:
+- **Administrator override** of controller decisions
+- **External applications** to contribute to blocking policies
+- **Real-time policy updates** without restarting the controller
+- **REST API** for integration with other security tools
+
+#### Policy Management Examples:
+```bash
+# Interactive policy management
+python policy_management_example.py
+
+# Add policy via API
+curl -X POST http://localhost:8080/policies \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "block",
+    "target_type": "ip",
+    "target_value": "192.168.1.100",
+    "priority": 80,
+    "reason": "Manual admin block"
+  }'
+
+# View all policies
+curl http://localhost:8080/policies
+```
+
+See `EXTERNAL_POLICY_SYSTEM.md` for complete documentation.
 
 The controller will listen on port 6633, and the topology will connect to it automatically.
 
@@ -77,7 +107,8 @@ The controller will listen on port 6633, and the topology will connect to it aut
 - Better maintainability and extensibility
 - Thread-safe inter-module communication
 - Configurable policies and thresholds
-- See `MODULAR_ARCHITECTURE.md` for detailed documentation
+- **External Policy System** for admin/external application integration
+- See `MODULAR_ARCHITECTURE.md` and `EXTERNAL_POLICY_SYSTEM.md` for detailed documentation
 
 ## Files created:
 - `distutils_compat.py` - Compatibility layer for Python 3.13

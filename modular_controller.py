@@ -28,6 +28,12 @@ from ryu.lib.packet import ethernet
 from ryu.lib.packet import ether_types
 from ryu.lib import hub
 
+# Import external policy system
+from external_policy_system import (
+    SharedPolicyStore, PolicyAPI, AdminInterface, ExternalPolicyConnector,
+    PolicyRule, PolicySource, PolicyAction
+)
+
 # ANSI color codes
 RED = "\033[91m"
 GREEN = "\033[92m"
@@ -260,14 +266,29 @@ class ThreatDetector:
 
 class MitigationPolicy:
     """
-    Responsible for deciding on appropriate mitigation actions
+    Enhanced policy engine that integrates with external policy system
+    Supports multiple policy sources and priority-based conflict resolution
     """
-    def __init__(self, logger):
+    def __init__(self, logger, policy_store: SharedPolicyStore = None):
         self.logger = logger
         self.active_blocks = set()  # Track currently blocked ports
         self.policy_queue = queue.Queue()
         self.running = False
         self.policy_thread = None
+        
+        # External policy integration
+        self.policy_store = policy_store or SharedPolicyStore("controller_policies.db")
+        self.policy_store.add_listener(self._on_external_policy_change)
+        
+        # Initialize admin and external interfaces
+        self.admin_interface = AdminInterface(self.policy_store)
+        self.external_connector = ExternalPolicyConnector(self.policy_store)
+        
+        # Start policy API server
+        self.policy_api = PolicyAPI(self.policy_store, port=8080)
+        self.policy_api.start()
+        
+        self.logger.info(f"{GREEN}Enhanced policy engine with external integration started{RESET}")
         
     def start(self, threat_queue):
         """Start the policy decision thread"""
@@ -280,6 +301,8 @@ class MitigationPolicy:
         self.running = False
         if self.policy_thread:
             self.policy_thread.kill()
+        if self.policy_api:
+            self.policy_api.stop()
     
     def _policy_loop(self):
         """Main policy decision loop"""
@@ -288,40 +311,136 @@ class MitigationPolicy:
                 threat_event = self.threat_queue.get(timeout=1)
                 self._process_threat_event(threat_event)
             except queue.Empty:
+                # Check for external policy changes periodically
+                self._check_external_policies()
                 continue
             except Exception as e:
                 self.logger.error(f"Error in policy loop: {e}")
     
     def _process_threat_event(self, threat_event):
         """Process a threat event and decide on mitigation action"""
-        port_key = (threat_event.switch_id, threat_event.port_no)
+        switch_id = threat_event.switch_id
+        port_no = threat_event.port_no
+        port_key = (switch_id, port_no)
         
+        # Check if there's an external policy for this specific port
+        switch_port_target = f"{switch_id}:{port_no}"
+        external_action = self.policy_store.get_effective_action("switch_port", switch_port_target)
+        
+        if external_action == PolicyAction.ALLOW:
+            self.logger.info(f"{GREEN}External policy allows traffic on port {port_no} - skipping controller block{RESET}")
+            return
+        elif external_action == PolicyAction.BLOCK:
+            self.logger.warning(f"{YELLOW}External policy already blocks port {port_no} - enforcing{RESET}")
+            self._enforce_external_block(switch_id, port_no)
+            return
+        
+        # Process internal threat detection
         if threat_event.threat_type == "DOS_ATTACK":
             if port_key not in self.active_blocks:
-                # Block the port
+                # Add controller-generated policy
+                self._add_controller_policy(switch_id, port_no, threat_event)
+                
+                # Create enforcement action
                 action = MitigationAction(
                     action_type="BLOCK",
-                    switch_id=threat_event.switch_id,
-                    port_no=threat_event.port_no,
+                    switch_id=switch_id,
+                    port_no=port_no,
                     priority=2
                 )
                 self.active_blocks.add(port_key)
                 self.policy_queue.put(action)
-                self.logger.error(f"{RED}BLOCKING port {threat_event.port_no} on switch {threat_event.switch_id:016x}{RESET}")
+                self.logger.error(f"{RED}BLOCKING port {port_no} on switch {switch_id:016x} (Controller Detection){RESET}")
         
         # Check if we should unblock any ports
         self._check_unblock_conditions()
     
-    def _check_unblock_conditions(self):
-        """Check if any blocked ports should be unblocked"""
-        # This is a simplified version - in practice, you'd want more sophisticated logic
-        # For now, we'll unblock after a certain time or based on external triggers
-        pass
+    def _add_controller_policy(self, switch_id, port_no, threat_event):
+        """Add a policy rule based on controller detection"""
+        policy_id = f"controller_dos_{switch_id}_{port_no}_{int(time.time())}"
+        target_value = f"{switch_id}:{port_no}"
+        
+        policy = PolicyRule(
+            id=policy_id,
+            source=PolicySource.CONTROLLER,
+            action=PolicyAction.BLOCK,
+            target_type="switch_port",
+            target_value=target_value,
+            priority=60,  # Medium priority for controller decisions
+            reason=f"DoS attack detected: {threat_event.threat_type}",
+            metadata={
+                "threat_type": threat_event.threat_type,
+                "severity": threat_event.severity,
+                "detection_time": time.time(),
+                "controller_generated": True
+            }
+        )
+        
+        self.policy_store.add_policy(policy)
+        self.logger.info(f"{BLUE}Added controller policy: {policy_id}{RESET}")
     
-    def request_unblock(self, switch_id, port_no):
-        """Request to unblock a specific port"""
+    def _enforce_external_block(self, switch_id, port_no):
+        """Enforce an external blocking policy"""
         port_key = (switch_id, port_no)
-        if port_key in self.active_blocks:
+        if port_key not in self.active_blocks:
+            action = MitigationAction(
+                action_type="BLOCK",
+                switch_id=switch_id,
+                port_no=port_no,
+                priority=3  # Higher priority for external policies
+            )
+            self.active_blocks.add(port_key)
+            self.policy_queue.put(action)
+            self.logger.warning(f"{YELLOW}ENFORCING external block on port {port_no} switch {switch_id:016x}{RESET}")
+    
+    def _check_external_policies(self):
+        """Check for external policies that need enforcement"""
+        # Get all blocking policies for switch ports
+        all_policies = self.policy_store.get_all_policies()
+        
+        for policy in all_policies:
+            if (policy.target_type == "switch_port" and 
+                policy.action == PolicyAction.BLOCK and
+                policy.source != PolicySource.CONTROLLER):
+                
+                # Parse switch_id:port_no
+                try:
+                    switch_id, port_no = policy.target_value.split(":")
+                    switch_id = int(switch_id)
+                    port_no = int(port_no)
+                    self._enforce_external_block(switch_id, port_no)
+                except ValueError:
+                    self.logger.error(f"Invalid switch_port format: {policy.target_value}")
+    
+    def _on_external_policy_change(self, action, policy):
+        """Handle external policy changes"""
+        if policy.target_type == "switch_port":
+            try:
+                switch_id, port_no = policy.target_value.split(":")
+                switch_id = int(switch_id)
+                port_no = int(port_no)
+                
+                if action == "add" and policy.action == PolicyAction.BLOCK:
+                    self.logger.warning(f"{YELLOW}External policy added: BLOCK {switch_id}:{port_no} "
+                                      f"(source: {policy.source.value}, priority: {policy.priority}){RESET}")
+                    self._enforce_external_block(switch_id, port_no)
+                    
+                elif action == "remove":
+                    self.logger.info(f"{GREEN}External policy removed: {policy.id}{RESET}")
+                    # Check if we should unblock
+                    self._check_port_unblock(switch_id, port_no)
+                    
+            except ValueError:
+                self.logger.error(f"Invalid switch_port format in external policy: {policy.target_value}")
+    
+    def _check_port_unblock(self, switch_id, port_no):
+        """Check if a port should be unblocked based on current policies"""
+        target_value = f"{switch_id}:{port_no}"
+        effective_action = self.policy_store.get_effective_action("switch_port", target_value)
+        
+        port_key = (switch_id, port_no)
+        if effective_action != PolicyAction.BLOCK and port_key in self.active_blocks:
+            # No blocking policy exists, unblock the port
             action = MitigationAction(
                 action_type="UNBLOCK",
                 switch_id=switch_id,
@@ -330,7 +449,49 @@ class MitigationPolicy:
             )
             self.active_blocks.remove(port_key)
             self.policy_queue.put(action)
-            self.logger.info(f"{GREEN}UNBLOCKING port {port_no} on switch {switch_id:016x}{RESET}")
+            self.logger.info(f"{GREEN}UNBLOCKING port {port_no} on switch {switch_id:016x} (No blocking policy){RESET}")
+    
+    def _check_unblock_conditions(self):
+        """Check if any blocked ports should be unblocked"""
+        # Check all currently blocked ports
+        for switch_id, port_no in list(self.active_blocks):
+            self._check_port_unblock(switch_id, port_no)
+    
+    def request_unblock(self, switch_id, port_no):
+        """Request to unblock a specific port (removes controller policies)"""
+        target_value = f"{switch_id}:{port_no}"
+        
+        # Remove controller-generated policies for this port
+        policies_to_remove = []
+        for policy in self.policy_store.get_policies_for_target("switch_port", target_value):
+            if policy.source == PolicySource.CONTROLLER:
+                policies_to_remove.append(policy.id)
+        
+        for policy_id in policies_to_remove:
+            self.policy_store.remove_policy(policy_id)
+            self.logger.info(f"{GREEN}Removed controller policy: {policy_id}{RESET}")
+        
+        # Check if port should be unblocked
+        self._check_port_unblock(switch_id, port_no)
+    
+    def get_admin_interface(self) -> AdminInterface:
+        """Get the admin interface for manual policy management"""
+        return self.admin_interface
+    
+    def get_external_connector(self) -> ExternalPolicyConnector:
+        """Get the external connector for integration with other systems"""
+        return self.external_connector
+    
+    def get_policy_status(self):
+        """Get current policy status for debugging"""
+        all_policies = self.policy_store.get_all_policies()
+        return {
+            "active_blocks": list(self.active_blocks),
+            "total_policies": len(all_policies),
+            "policy_sources": {source.value: len([p for p in all_policies if p.source == source]) 
+                             for source in PolicySource},
+            "api_port": self.policy_api.port if self.policy_api else None
+        }
 
 
 class MitigationEnforcer:
