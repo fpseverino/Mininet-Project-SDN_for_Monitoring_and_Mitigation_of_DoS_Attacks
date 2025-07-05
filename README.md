@@ -8,18 +8,30 @@ This project has been **completely refactored** to address critical architectura
 
 1. **✅ Modular Architecture**: Separated concerns into independent, testable components
 2. **✅ External Policy System**: Eliminates controller-centric blocking decisions
-3. **✅ Python 3.13 Compatibility**: Updated for latest Python with full compatibility
-4. **✅ Administrator Override**: Real-time policy management capabilities
-5. **✅ External Integration**: REST API for security tools and applications
-6. **✅ Priority-Based Resolution**: Intelligent conflict resolution system
+3. **✅ Enhanced Flow Mitigation**: Flow-level granularity prevents over-blocking
+4. **✅ Complex Topology Support**: Scales to enterprise networks (10+ switches)
+5. **✅ Python 3.13 Compatibility**: Updated for latest Python with full compatibility
+6. **✅ Administrator Override**: Real-time policy management capabilities
+7. **✅ External Integration**: REST API for security tools and applications
+8. **✅ Priority-Based Resolution**: Intelligent conflict resolution system
 
 ### 📊 **Architecture Overview**
 
-The project consists of a Mininet topology with 4 hosts and 4 OVS switches:
+The project supports multiple topologies:
+
+#### **Simple Topology** (`topology.py`)
+- 4 switches, 3 hosts for basic testing
 - **h1, h3** → s1 (DoS attackers)
 - **h2** → s2 (Client)
 - **s1, s2** → s3 (Aggregation)
 - **s3** → s4 → **h4** (Server)
+
+#### **Complex Topology** (`complex_topology.py`) - **🌟 ENTERPRISE-SCALE**
+- 10 switches (s1-s10) in core-edge architecture
+- 15 hosts: 10 legitimate + 5 distributed attackers
+- **Addresses topology sensitivity flaw**
+- No cycles, multiple redundant paths
+- Realistic enterprise network simulation
 
 ### 🏗️ **Controller Evolution**
 
@@ -62,6 +74,43 @@ Addresses the critical **controller-centric blocking flaw**:
 | **[EXTERNAL_POLICY_SYSTEM.md](EXTERNAL_POLICY_SYSTEM.md)** | External policy system guide |
 | **[DoS_ATTACK_SIMULATION.md](DoS_ATTACK_SIMULATION.md)** | Attack simulation and testing |
 | **[MODULAR_IMPLEMENTATION_SUMMARY.md](MODULAR_IMPLEMENTATION_SUMMARY.md)** | Implementation summary |
+| **[COMPLEX_TOPOLOGY_SOLUTION.md](COMPLEX_TOPOLOGY_SOLUTION.md)** | Complex topology for enterprise scale |
+| **[TOPOLOGY_SENSITIVITY_RESOLUTION.md](TOPOLOGY_SENSITIVITY_RESOLUTION.md)** | Topology sensitivity flaw resolution |
+
+## 🏢 **Enterprise-Scale Complex Topology**
+
+### **Topology Sensitivity Flaw - RESOLVED** ✅
+
+The original system was tuned for a specific 4-switch topology, limiting its applicability to enterprise networks. This has been completely resolved:
+
+#### **Problem Addressed**
+- ❌ **Before**: System only worked with simple, specific topologies
+- ❌ **Before**: Limited scalability (4 switches, 3 hosts)
+- ❌ **Before**: Attackers co-located with legitimate hosts
+- ❌ **Before**: No enterprise-scale validation
+
+#### **Solution Implemented**
+- ✅ **Complex Topology**: 10 switches, 15 hosts (10 legitimate + 5 attackers)
+- ✅ **Distributed Attackers**: Each attacker on different switch
+- ✅ **Enterprise Architecture**: Core-edge design with redundancy
+- ✅ **Network-wide Impact**: Attacks affect entire network realistically
+- ✅ **Cycle-free Design**: Proper topology without loops
+- ✅ **Scalable Controller**: Handles complex topologies efficiently
+
+#### **Usage**
+```bash
+# Run complex topology
+python complex_topology.py
+
+# Validate topology solution
+python complex_topology.py validate
+
+# Test topology sensitivity resolution
+python test_topology_sensitivity.py
+
+# Interactive demonstration
+python demo_topology_sensitivity_solution.py
+```
 
 ## 🚀 **Quick Start**
 
