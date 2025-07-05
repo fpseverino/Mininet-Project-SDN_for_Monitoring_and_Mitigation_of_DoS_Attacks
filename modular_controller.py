@@ -34,6 +34,9 @@ from external_policy_system import (
     PolicyRule, PolicySource, PolicyAction
 )
 
+# Import enhanced mitigation enforcer
+from enhanced_mitigation_enforcer import EnhancedMitigationEnforcer
+
 # ANSI color codes
 RED = "\033[91m"
 GREEN = "\033[92m"
@@ -603,7 +606,12 @@ class ModularSDNController(app_manager.RyuApp):
         self.monitor = NetworkMonitor(self.logger)
         self.detector = ThreatDetector(self.logger)
         self.policy = MitigationPolicy(self.logger)
-        self.enforcer = MitigationEnforcer(self.logger, self.monitor.datapaths)
+        
+        # Initialize enhanced mitigation enforcer (addresses over-blocking flaw)
+        self.enforcer = EnhancedMitigationEnforcer(self.logger, self.monitor.datapaths)
+        
+        # Initialize legacy enforcer for backward compatibility
+        self.legacy_enforcer = MitigationEnforcer(self.logger, self.monitor.datapaths)
         
         # For basic switching functionality
         self.mac_to_port = {}
@@ -668,7 +676,7 @@ class ModularSDNController(app_manager.RyuApp):
     
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
-        """Handle packet-in events (basic switching)"""
+        """Handle packet-in events with enhanced flow analysis"""
         msg = ev.msg
         datapath = msg.datapath
         ofproto = datapath.ofproto
@@ -680,6 +688,16 @@ class ModularSDNController(app_manager.RyuApp):
         
         if eth.ethertype == ether_types.ETH_TYPE_LLDP:
             return
+        
+        # Enhanced flow analysis for DoS detection
+        recommended_action = self.enforcer.analyze_packet_in(msg.data, in_port, datapath.id)
+        
+        if recommended_action == "block":
+            self.logger.warning(f"🚫 Blocking malicious packet from port {in_port}")
+            return  # Drop the packet
+        elif recommended_action == "rate_limit":
+            self.logger.warning(f"⚠️  Rate limiting suspicious packet from port {in_port}")
+            # Continue with normal processing but mark for rate limiting
         
         dst = eth.dst
         src = eth.src
@@ -717,3 +735,21 @@ class ModularSDNController(app_manager.RyuApp):
     def manual_unblock(self, switch_id, port_no):
         """Manually unblock a port (for testing/debugging)"""
         self.policy.request_unblock(switch_id, port_no)
+    
+    def add_to_whitelist(self, address: str):
+        """Add address to whitelist (prevents blocking)"""
+        self.enforcer.add_to_whitelist(address)
+        self.logger.info(f"Added {address} to whitelist")
+    
+    def add_to_blacklist(self, address: str):
+        """Add address to blacklist (immediate blocking)"""
+        self.enforcer.add_to_blacklist(address)
+        self.logger.info(f"Added {address} to blacklist")
+    
+    def get_flow_statistics(self):
+        """Get current flow statistics"""
+        return self.enforcer.get_flow_statistics()
+    
+    def get_detailed_flow_info(self):
+        """Get detailed flow information"""
+        return self.enforcer.get_detailed_flow_info()
