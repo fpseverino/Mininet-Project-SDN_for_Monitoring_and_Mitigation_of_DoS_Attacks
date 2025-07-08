@@ -1,8 +1,8 @@
 #!/bin/bash
-"""
-Complete SDN Setup Script
-This script sets up and runs both the Ryu controller and Mininet topology
-"""
+#
+# Complete SDN Setup Script
+# This script sets up and runs both the Ryu controller and Mininet topology
+#
 
 # Colors for output
 RED='\033[0;31m'
@@ -49,6 +49,20 @@ exec(open('topology.py').read())
 "
 }
 
+# Function to run complex topology
+run_complex_topology() {
+    echo -e "${YELLOW}Starting Complex Mininet Topology...${NC}"
+    echo "This requires sudo privileges for network simulation"
+    echo "Make sure the controller is running on port 6633"
+    echo
+
+    cd "$SCRIPT_DIR"
+    sudo PYTHONPATH="$SCRIPT_DIR" "$VENV_PYTHON" -c "
+import distutils_compat
+exec(open('complex_topology.py').read())
+"
+}
+
 # Function to test setup
 test_setup() {
     echo -e "${YELLOW}Testing SDN Setup...${NC}"
@@ -82,6 +96,9 @@ case "${1:-help}" in
         ;;
     "topology")
         run_topology
+        ;;
+    "complex_topology")
+        run_complex_topology
         ;;
     "test")
         test_setup

@@ -16,9 +16,9 @@ class Environment(object):
 
     def __init__(self):
         "Create a network."
-        self.net = Mininet(controller=RemoteController, link=TCLink)
+        self.net = Mininet(controller=None, link=TCLink)
         info("*** Starting controller\n")
-        c1 = self.net.addController("c1", controller=RemoteController)  # Controller
+        c1 = self.net.addController("c1", controller=RemoteController, ip='127.0.0.1', port=6633)  # Controller
         c1.start()
 
         # definition of hosts

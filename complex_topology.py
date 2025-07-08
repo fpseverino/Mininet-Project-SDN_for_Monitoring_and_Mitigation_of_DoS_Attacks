@@ -139,18 +139,15 @@ class ComplexEnvironment(object):
         
         # Create network
         self.net = Mininet(topo=self.topo, 
-                          controller=RemoteController, 
+                          controller=None,
                           link=TCLink,
                           autoSetMacs=True)
         
         # Add controller
         info("*** Adding controller\n")
-        self.controller = self.net.addController('c1', controller=RemoteController)
+        self.controller = self.net.addController('c1', controller=RemoteController, ip='127.0.0.1', port=6633)
         
-        # Build and start network
-        info("*** Building network\n")
-        self.net.build()
-        
+        # Start controller and network
         info("*** Starting controller\n")
         self.controller.start()
         
@@ -282,6 +279,18 @@ def main():
                 CLI(env.net)
             else:
                 error("*** Network connectivity issues detected\n")
+                info("*** This is likely because the controller is not running properly\n")
+                info("*** Starting CLI anyway for debugging and manual testing\n")
+                info("*** To fix: Check controller logs and switch connections\n")
+                
+                # Show topology stats
+                stats = env.get_topology_stats()
+                info(f"*** Topology stats: {stats}\n")
+                
+                # Start CLI anyway
+                info("*** Starting CLI for manual testing\n")
+                info("*** Note: Pings may fail without proper controller operation\n")
+                CLI(env.net)
                 
         except KeyboardInterrupt:
             info("*** Interrupted by user\n")
