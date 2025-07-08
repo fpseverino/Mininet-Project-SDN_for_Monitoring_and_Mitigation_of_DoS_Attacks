@@ -69,14 +69,14 @@ Addresses the critical **controller-centric blocking flaw**:
 
 | Document | Description |
 |----------|-------------|
-| **[SETUP_GUIDE.md](SETUP_GUIDE.md)** | Complete setup instructions for Python 3.13 |
-| **[MODULAR_ARCHITECTURE.md](MODULAR_ARCHITECTURE.md)** | Detailed architecture documentation |
-| **[EXTERNAL_POLICY_SYSTEM.md](EXTERNAL_POLICY_SYSTEM.md)** | External policy system guide |
-| **[DoS_ATTACK_SIMULATION.md](DoS_ATTACK_SIMULATION.md)** | Attack simulation and testing |
-| **[MODULAR_IMPLEMENTATION_SUMMARY.md](MODULAR_IMPLEMENTATION_SUMMARY.md)** | Implementation summary |
-| **[COMPLEX_TOPOLOGY_SOLUTION.md](COMPLEX_TOPOLOGY_SOLUTION.md)** | Complex topology for enterprise scale |
-| **[TOPOLOGY_SENSITIVITY_RESOLUTION.md](TOPOLOGY_SENSITIVITY_RESOLUTION.md)** | Topology sensitivity flaw resolution |
-| **[ADAPTIVE_BLOCKING_FLAW_RESOLUTION.md](ADAPTIVE_BLOCKING_FLAW_RESOLUTION.md)** | Inflexible blocking/unblocking policy flaw resolution |
+| **[SETUP_GUIDE.md](docs/SETUP_GUIDE.md)** | Complete setup instructions for Python 3.13 |
+| **[MODULAR_ARCHITECTURE.md](docs/MODULAR_ARCHITECTURE.md)** | Detailed architecture documentation |
+| **[EXTERNAL_POLICY_SYSTEM.md](docs/EXTERNAL_POLICY_SYSTEM.md)** | External policy system guide |
+| **[DoS_ATTACK_SIMULATION.md](docs/DoS_ATTACK_SIMULATION.md)** | Attack simulation and testing |
+| **[MODULAR_IMPLEMENTATION_SUMMARY.md](docs/MODULAR_IMPLEMENTATION_SUMMARY.md)** | Implementation summary |
+| **[COMPLEX_TOPOLOGY_SOLUTION.md](docs/COMPLEX_TOPOLOGY_SOLUTION.md)** | Complex topology for enterprise scale |
+| **[TOPOLOGY_SENSITIVITY_RESOLUTION.md](docs/TOPOLOGY_SENSITIVITY_RESOLUTION.md)** | Topology sensitivity flaw resolution |
+| **[ADAPTIVE_BLOCKING_FLAW_RESOLUTION.md](docs/ADAPTIVE_BLOCKING_FLAW_RESOLUTION.md)** | Inflexible blocking/unblocking policy flaw resolution |
 
 ## 🔄 **Adaptive Blocking/Unblocking Policy System**
 
