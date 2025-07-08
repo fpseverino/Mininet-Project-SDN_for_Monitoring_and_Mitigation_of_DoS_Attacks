@@ -37,6 +37,9 @@ from external_policy_system import (
 # Import enhanced mitigation enforcer
 from enhanced_mitigation_enforcer import EnhancedMitigationEnforcer
 
+# Import adaptive blocking system
+from adaptive_blocking_system import AdaptiveBlockingIntegration
+
 # ANSI color codes
 RED = "\033[91m"
 GREEN = "\033[92m"
@@ -610,6 +613,9 @@ class ModularSDNController(app_manager.RyuApp):
         # Initialize enhanced mitigation enforcer (addresses over-blocking flaw)
         self.enforcer = EnhancedMitigationEnforcer(self.logger, self.monitor.datapaths)
         
+        # Initialize adaptive blocking system integration
+        self.adaptive_blocking = AdaptiveBlockingIntegration(self, self.enforcer)
+        
         # Initialize legacy enforcer for backward compatibility
         self.legacy_enforcer = MitigationEnforcer(self.logger, self.monitor.datapaths)
         
@@ -622,7 +628,7 @@ class ModularSDNController(app_manager.RyuApp):
         self.policy.start(self.detector.threat_queue)
         self.enforcer.start(self.policy.policy_queue)
         
-        self.logger.info(f"{GREEN}Modular SDN Controller started successfully{RESET}")
+        self.logger.info(f"{GREEN}Modular SDN Controller with Adaptive Blocking started successfully{RESET}")
     
     def close(self):
         """Clean shutdown of all modules"""
@@ -753,3 +759,40 @@ class ModularSDNController(app_manager.RyuApp):
     def get_detailed_flow_info(self):
         """Get detailed flow information"""
         return self.enforcer.get_detailed_flow_info()
+    
+    # Adaptive Blocking System Methods
+    def get_adaptive_blocking_stats(self):
+        """Get adaptive blocking system statistics"""
+        return self.adaptive_blocking.get_adaptive_stats()
+    
+    def force_adaptive_unblock(self, ip_address: str):
+        """Force unblock an IP using adaptive system (admin override)"""
+        result = self.adaptive_blocking.force_unblock(ip_address)
+        if result:
+            self.logger.info(f"🔓 Admin override: Force unblocked {ip_address}")
+        else:
+            self.logger.warning(f"⚠️  Failed to force unblock {ip_address} - not found")
+        return result
+    
+    def get_ip_blocking_status(self, ip_address: str):
+        """Get current blocking status for specific IP"""
+        return self.adaptive_blocking.get_ip_status(ip_address)
+    
+    def update_network_conditions(self, conditions: dict):
+        """Update network conditions for adaptive threshold adjustment"""
+        self.adaptive_blocking.adaptive_blocking.update_network_conditions(conditions)
+        self.logger.info(f"📊 Updated network conditions: {conditions}")
+    
+    def get_reputation_score(self, ip_address: str):
+        """Get reputation score for an IP address"""
+        return self.adaptive_blocking.adaptive_blocking.reputation_system.get_reputation(ip_address)
+    
+    def update_ip_reputation(self, ip_address: str, is_malicious: bool, is_false_positive: bool = False):
+        """Update reputation for an IP address"""
+        self.adaptive_blocking.adaptive_blocking.reputation_system.update_reputation(
+            ip_address, is_malicious, is_false_positive
+        )
+        action = "malicious" if is_malicious else "legitimate"
+        if is_false_positive:
+            action += " (false positive)"
+        self.logger.info(f"📈 Updated reputation for {ip_address}: {action}")

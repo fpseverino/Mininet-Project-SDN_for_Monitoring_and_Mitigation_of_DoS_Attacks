@@ -740,50 +740,131 @@ class AdaptiveBlockingIntegration:
     def __init__(self, modular_controller, enhanced_mitigation_enforcer):
         self.modular_controller = modular_controller
         self.enhanced_mitigation = enhanced_mitigation_enforcer
+        
+        # Access the policy store from the controller's policy component
+        policy_store = getattr(modular_controller.policy, 'policy_store', None)
+        if policy_store is None:
+            # Create a simple policy store if none exists
+            class SimplePolicyStore:
+                def __init__(self):
+                    self.policies = {}
+                
+                def add_policy(self, rule_id, src_ip, dst_ip, action, priority, metadata=None):
+                    self.policies[rule_id] = {
+                        'src_ip': src_ip,
+                        'dst_ip': dst_ip,
+                        'action': action,
+                        'priority': priority,
+                        'metadata': metadata or {}
+                    }
+                    modular_controller.logger.info(f"📋 Added adaptive policy: {rule_id}")
+                
+                def remove_policy(self, rule_id):
+                    if rule_id in self.policies:
+                        del self.policies[rule_id]
+                        modular_controller.logger.info(f"🗑️  Removed adaptive policy: {rule_id}")
+            
+            policy_store = SimplePolicyStore()
+        
         self.adaptive_blocking = AdaptiveBlockingSystem(
-            modular_controller.policy_store,
+            policy_store,
             modular_controller.logger
         )
         
-        # Replace existing blocking logic
-        self._integrate_with_controller()
-    
-    def _integrate_with_controller(self):
-        """Integrate adaptive blocking with existing controller"""
-        # Monkey patch the mitigation policy to use adaptive blocking
-        original_block_method = self.modular_controller.mitigation_policy.should_block_port
+        # Integrate with the threat detector
+        self._integrate_with_threat_detection()
         
-        def adaptive_should_block_port(switch_id, port_no, traffic_stats):
-            # Extract IP from traffic stats (simplified)
-            ip_address = traffic_stats.get('src_ip', 'unknown')
-            if ip_address == 'unknown':
-                return original_block_method(switch_id, port_no, traffic_stats)
+        modular_controller.logger.info("🔄 Adaptive Blocking System integrated successfully")
+    
+    def _integrate_with_threat_detection(self):
+        """Integrate adaptive blocking with the threat detection system"""
+        # Store original method
+        original_detect_threats = self.modular_controller.detector._analyze_traffic
+        
+        def adaptive_threat_analysis(datapath_id, port_no, metrics):
+            # Call original threat detection
+            result = original_detect_threats(datapath_id, port_no, metrics)
             
-            # Use adaptive blocking system
-            should_block, reason = self.adaptive_blocking.should_block(ip_address, traffic_stats)
+            # Convert metrics to the format expected by adaptive blocking
+            traffic_metrics = {
+                'packet_rate': getattr(metrics, 'rx_packets', 0) + getattr(metrics, 'tx_packets', 0),
+                'byte_rate': getattr(metrics, 'rx_bytes', 0) + getattr(metrics, 'tx_bytes', 0),
+                'connection_rate': 10,  # Simplified - could be enhanced
+                'burst_ratio': 0.5,    # Simplified - could be enhanced
+                'unique_ports': 1,     # Simplified - could be enhanced
+                'repetition_ratio': 0.3 # Simplified - could be enhanced
+            }
+            
+            # Use a simplified IP address based on port (for demo purposes)
+            ip_address = f"192.168.1.{port_no % 255}"
+            
+            # Check with adaptive blocking system
+            should_block, reason = self.adaptive_blocking.should_block(ip_address, traffic_metrics)
             
             if should_block:
                 # Create adaptive policy
-                policy = self.adaptive_blocking.block_ip(ip_address, traffic_stats)
-                self.modular_controller.logger.info(f"🔄 Adaptive blocking decision: {reason}")
-                return True
+                policy = self.adaptive_blocking.block_ip(ip_address, traffic_metrics)
+                self.modular_controller.logger.warning(
+                    f"🔄 Adaptive blocking triggered: {ip_address} on switch {datapath_id:016x} port {port_no}"
+                )
+                self.modular_controller.logger.info(f"📊 Reason: {reason}")
+                
+                # Create enhanced threat event for the policy system
+                from modular_controller import ThreatEvent
+                enhanced_threat = ThreatEvent(
+                    switch_id=datapath_id,
+                    port_no=port_no,
+                    threat_type="ADAPTIVE_DOS_DETECTION",
+                    severity=policy.threat_level.value.upper(),
+                    metrics=metrics
+                )
+                
+                # Add to threat queue if it exists
+                if hasattr(self.modular_controller.detector, 'threat_queue'):
+                    self.modular_controller.detector.threat_queue.put(enhanced_threat)
             
-            return False
+            return result
         
         # Replace the method
-        self.modular_controller.mitigation_policy.should_block_port = adaptive_should_block_port
+        self.modular_controller.detector._analyze_traffic = adaptive_threat_analysis
     
     def get_adaptive_stats(self) -> Dict:
         """Get adaptive blocking statistics"""
-        return self.adaptive_blocking.get_system_stats()
+        stats = self.adaptive_blocking.get_system_stats()
+        
+        # Add integration-specific stats
+        stats['integration_info'] = {
+            'controller_connected': True,
+            'enhanced_mitigation_connected': True,
+            'total_adaptive_policies': len(getattr(self.adaptive_blocking.policy_store, 'policies', {}))
+        }
+        
+        return stats
     
     def force_unblock(self, ip_address: str) -> bool:
         """Force unblock an IP (admin override)"""
-        return self.adaptive_blocking.unblock_ip(ip_address, "Admin override")
+        result = self.adaptive_blocking.unblock_ip(ip_address, "Admin override")
+        if result:
+            self.modular_controller.logger.info(f"🔓 Admin force unblock: {ip_address}")
+        return result
     
     def get_ip_status(self, ip_address: str) -> Optional[Dict]:
         """Get status for specific IP"""
         return self.adaptive_blocking.get_policy_status(ip_address)
+    
+    def get_all_blocked_ips(self) -> List[Dict]:
+        """Get status of all currently blocked IPs"""
+        blocked_ips = []
+        for ip_address in self.adaptive_blocking.active_policies.keys():
+            status = self.get_ip_status(ip_address)
+            if status:
+                blocked_ips.append(status)
+        return blocked_ips
+    
+    def update_network_conditions(self, conditions: Dict[str, float]):
+        """Update network conditions for adaptive thresholds"""
+        self.adaptive_blocking.update_network_conditions(conditions)
+        self.modular_controller.logger.info(f"📊 Network conditions updated: {conditions}")
 
 
 if __name__ == "__main__":
