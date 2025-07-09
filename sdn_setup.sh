@@ -37,6 +37,7 @@ run_controller() {
 
 # Function to run topology
 run_topology() {
+    sudo mn -c
     echo -e "${YELLOW}Starting Mininet Topology...${NC}"
     echo "This requires sudo privileges for network simulation"
     echo "Make sure the controller is running on port 6633"
