@@ -52,8 +52,6 @@ class PolicyMaker(threading.Thread):
             collected_stats = ev.stats
             time_interval = ev.time_interval
 
-            print(f"Time: {time_interval}")
-
             # Filter flows
             flows = sorted(
                     (flow for flow in collected_stats if flow.priority == 1),
@@ -149,7 +147,7 @@ class PolicyMaker(threading.Thread):
                         # Send block warning through queue
 
                         self.policy_q.put(Policy(dpid, eth_src, eth_dst, True))
-                        self.flow_alarm[dpid][(in_port, eth_src, eth_dst)][1] == 0
+                        self.flow_alarm[dpid][(in_port, eth_src, eth_dst)][1] = 1
                     elif(self.flow_alarm[dpid][(in_port, eth_src, eth_dst)][0] == 2 and self.flow_alarm[dpid][(in_port, eth_src, eth_dst)][1] == 1):
                        
                         self.logger.info(f"Flusso da {eth_src} a {eth_dst} in switch {dpid} sta tornando nei limiti")
@@ -157,7 +155,7 @@ class PolicyMaker(threading.Thread):
                         # Send unblock warning through queue
 
                         self.policy_q.put(Policy(dpid, eth_src, eth_dst, False))
-                        self.flow_alarm[dpid][(in_port, eth_src, eth_dst)][1] == 0
+                        self.flow_alarm[dpid][(in_port, eth_src, eth_dst)][1] = 0
 
                 # Aggiorna stats
                 self.flow_stats[dpid] = {
